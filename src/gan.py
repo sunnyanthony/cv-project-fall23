@@ -42,8 +42,8 @@ class GAN():
         """
         self.gen = generator
         self.disc = discriminator
-        self.gen_input = generator_input
-        self.disc_input = groundtruth
+        self.gen_input = iter(generator_input)
+        self.disc_input = iter(groundtruth)
         self.criterion = criterion
         self.gen_opt = optimizer(self.gen.parameters(), lr = learning_rate)
         self.disc_opt = optimizer(self.disc.parameters(), lr = learning_rate)
@@ -65,7 +65,7 @@ class GAN():
         """
         return (proportion * true_loss + (1 - proportion) *false_loss)
 
-    def generator_loss(self):
+    def generator_loss(self, inputs):
         """
         Compute the loss for the generator, which measures how well the generator is 
         fooling the discriminator. The generator aims to produce outputs that the 
@@ -75,7 +75,6 @@ class GAN():
         The loss value for the generator.
         """
 
-        inputs = next(self.gen_input)
         outs = self.gen(inputs)
         checked = self.disc(outs)
         return self.criterion(checked, ones_like(checked))
@@ -92,14 +91,14 @@ class GAN():
         """
 
         inputs = next(self.gen_input)
-        truth_inputs = next(self.disc_input_input)
+        truth_inputs = next(self.disc_input)
         outs = self.gen(inputs)
         checked = self.disc(outs.detach())
         results = self.disc(truth_inputs)
         should_be_true = self.criterion(results, ones_like(results))
         should_be_false = self.criterion(checked, zeros_like(checked))
         proportion = results.shape[0] / (results.shape[0] + checked.shape[0])
-        return self.loss_calculation(should_be_true, should_be_false, proportion)
+        return self.loss_calculation(should_be_true, should_be_false, proportion), inputs
 
     def training(self):
         """
@@ -110,11 +109,11 @@ class GAN():
         """
 
         self.disc_opt.zero_grad()
-        disc_loss = self.discriminator_loss()
+        disc_loss, gen_inputs = self.discriminator_loss()
         disc_loss.backward(retain_graph=True)
         self.disc_opt.step()
 
         self.gen_opt.zero_grad()
-        gen_loss = self.generator_loss()
+        gen_loss = self.generator_loss(gen_inputs)
         gen_loss.backward()
         self.gen_opt.step()
