@@ -1,14 +1,37 @@
 from typing import Any
 from torch.utils.data import DataLoader
-from torch import nn, ones_like, zeros_like, optim, mean
+from torch import nn, optim, autograd, device, cuda, backends
+from torch import ones_like, zeros_like, mean, rand, ones
 
 
 class wgan_criterion(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, disc, lambda_gp) -> None:
+        self.lambda_gp = lambda_gp
+        self.disc = disc
+        self.device = device("cuda" if cuda.is_available() else "cpu" if not backends.mps.is_available() else "mps")
+        #super().__init__(*args, **kwargs)
     
     def __call__(self, fake, real=None) -> Any:
-        return mean(fake) - (mean(real) if real else 0)
+        return mean(fake) - (mean(real) if real else 0) + \
+            self.compute_gradient_penalty(self.disc, real, fake, self.device)
+
+    def compute_gradient_penalty(self, Disc, real_data, fake_data, device):
+        alpha = rand(real_data.size(0), 1, 1, 1, requires_grad=True).to(device)
+        interpolates = (alpha * real_data + ((1 - alpha) * fake_data)).to(device)
+        interpolates = interpolates.requires_grad_(True)
+        d_interpolates = Disc(interpolates)
+        fake = ones(d_interpolates.size()).requires_grad_(False).to(device)
+        gradients = autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.lambda_gp
+        return gradient_penalty
 
 losses = {
     "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
