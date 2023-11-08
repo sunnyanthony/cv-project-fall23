@@ -1,5 +1,19 @@
+from typing import Any
 from torch.utils.data import DataLoader
-from torch import nn, ones_like, zeros_like, optim
+from torch import nn, ones_like, zeros_like, optim, mean
+
+
+class wgan_criterion(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+    
+    def __call__(self, fake, real=None) -> Any:
+        return mean(fake) - (mean(real) if real else 0)
+
+losses = {
+    "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
+    "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
+}
 
 
 class GAN():
@@ -49,7 +63,7 @@ class GAN():
         self.disc_opt = optimizer(self.disc.parameters(), lr = learning_rate)
 
     @staticmethod
-    def loss_calculation(true_loss, false_loss, proportion):
+    def loss_calculation(true_loss, false_loss, proportion) -> int:
         """
         Calculate the discriminator's combined loss by taking a weighted average of the 
         true and false loss, where the true loss is the error on real data and the false 
