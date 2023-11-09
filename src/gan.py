@@ -33,6 +33,7 @@ class wgan_criterion(nn.Module):
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.lambda_gp
         return gradient_penalty
 
+
 losses = {
     "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
@@ -129,6 +130,8 @@ class GAN():
 
         inputs = next(self.gen_input)
         truth_inputs = next(self.disc_input)
+        if inputs is None or truth_inputs is None:
+            return None, None
         outs = self.gen(inputs)
         checked = self.disc(outs.detach())
         results = self.disc(truth_inputs)
@@ -145,12 +148,20 @@ class GAN():
         its loss, which is calculated by how well it fools the discriminator.
         """
 
-        self.disc_opt.zero_grad()
-        disc_loss, gen_inputs = self.discriminator_loss()
-        disc_loss.backward(retain_graph=True)
-        self.disc_opt.step()
+        while True:
+            self.disc_opt.zero_grad()
+            disc_loss, gen_inputs = self.discriminator_loss()
+            if disc_loss is None or gen_inputs is None:
+                # devour all data from dataloader
+                break
+            disc_loss.backward(retain_graph=True)
+            self.disc_opt.step()
 
-        self.gen_opt.zero_grad()
-        gen_loss = self.generator_loss(gen_inputs)
-        gen_loss.backward()
-        self.gen_opt.step()
+            self.gen_opt.zero_grad()
+            gen_loss = self.generator_loss(gen_inputs)
+            gen_loss.backward()
+            self.gen_opt.step()
+    
+    def training_loop(self, epoch):
+        for _ in range(epoch):
+            self.training()
