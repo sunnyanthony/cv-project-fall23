@@ -1,1 +1,2 @@
-python -m test.gantest
+#!/bin/bash
+python3 -m test.gantest
