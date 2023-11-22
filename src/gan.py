@@ -61,12 +61,33 @@ class stylegan_criterion(nn.Module):
 
         return discriminator_loss
 
+class BEGANDiscriminatorLoss(torch.nn.Module):
+    def __init__(self, lambda_=0.001, gamma=0.75):
+        super(BEGANDiscriminatorLoss, self).__init__()
+        self.lambda_ = lambda_
+        self.gamma = gamma
+        self.k_t = torch.tensor(0.0, requires_grad=False)
 
+    def forward(self, real_images, fake_images, discriminator, generator):
+        # Autoencoder reconstruction loss for real images
+        recon_real = F.l1_loss(real_images, discriminator(real_images))
+
+        # Autoencoder reconstruction loss for fake images
+        fake_images_gen = generator(torch.randn_like(fake_images))
+        recon_fake = F.l1_loss(fake_images, discriminator(fake_images_gen.detach()))
+
+        # Convergence measure
+        balance = F.l1_loss(discriminator(fake_images_gen) - self.lambda_ * fake_images, torch.zeros_like(fake_images))
+
+        # Total discriminator loss
+        loss_d = recon_real - self.k_t * balance
+        return loss_d
 
 losses = {
     "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
     "stylegan": stylegan_criterion,
+    "BEGAN": BEGANDiscriminatorLoss,
 }
 
 class GAN():
