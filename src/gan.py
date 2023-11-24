@@ -33,10 +33,61 @@ class wgan_criterion(nn.Module):
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.lambda_gp
         return gradient_penalty
 
+class stylegan_criterion(nn.Module):
+    def __init__(self, disc, lambda_gp) -> None:
+        self.lambda_gp = lambda_gp
+        self.disc = disc
+        self.device = device("cuda" if cuda.is_available() else "cpu" if not backends.mps.is_available() else "mps")
+        #super().__init__(*args, **kwargs)
+    
+    def __call__(self, fake, real=None) -> Any:
+        return self.compute_stylegan_discriminator_loss(self.disc, real, fake, self.device)
+
+    def compute_stylegan_discriminator_loss(discriminator, real_images, fake_images, gamma=10.0):
+        # Hinge loss for real images
+        hinge_real = -torch.mean(torch.min(0, -1 + discriminator(real_images)))
+
+        # Hinge loss for fake images
+        hinge_fake = -torch.mean(torch.min(0, -1 - discriminator(fake_images)))
+
+        # R1 regularization
+        real_images.requires_grad = True
+        logits_real = discriminator(real_images)
+        gradients = torch.autograd.grad(outputs=logits_real.sum(), inputs=real_images, create_graph=True)[0]
+        r1_penalty = 0.5 * gamma * torch.mean(gradients.pow(2))
+
+        # Total discriminator loss
+        discriminator_loss = hinge_real + hinge_fake + r1_penalty
+
+        return discriminator_loss
+
+class BEGANDiscriminatorLoss(torch.nn.Module):
+    def __init__(self, lambda_=0.001, gamma=0.75):
+        super(BEGANDiscriminatorLoss, self).__init__()
+        self.lambda_ = lambda_
+        self.gamma = gamma
+        self.k_t = torch.tensor(0.0, requires_grad=False)
+
+    def forward(self, real_images, fake_images, discriminator, generator):
+        # Autoencoder reconstruction loss for real images
+        recon_real = F.l1_loss(real_images, discriminator(real_images))
+
+        # Autoencoder reconstruction loss for fake images
+        fake_images_gen = generator(torch.randn_like(fake_images))
+        recon_fake = F.l1_loss(fake_images, discriminator(fake_images_gen.detach()))
+
+        # Convergence measure
+        balance = F.l1_loss(discriminator(fake_images_gen) - self.lambda_ * fake_images, torch.zeros_like(fake_images))
+
+        # Total discriminator loss
+        loss_d = recon_real - self.k_t * balance
+        return loss_d
 
 losses = {
     "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
+    "stylegan": stylegan_criterion,
+    "BEGAN": BEGANDiscriminatorLoss,
 }
 
 class GAN():
@@ -178,6 +229,7 @@ class GAN():
     def training_loop(self, epoch):
         for _ in range(epoch):
             self.training()
+            
             if self.gen_scheduler:
                 self.gen_scheduler.step()
             if self.disc_scheduler:
@@ -185,3 +237,4 @@ class GAN():
 
     def register_train_hook(self, callback):
         self.callback = callback
+
