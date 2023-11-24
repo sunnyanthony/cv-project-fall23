@@ -39,7 +39,6 @@ losses = {
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
 }
 
-
 class GAN():
     def __init__(self,
                  generator: nn.Module,
@@ -48,6 +47,7 @@ class GAN():
                  generator_input: DataLoader,
                  criterion: nn.Module,
                  optimizer: optim.Optimizer,
+                 schefuler: optim.Optimizer=None,
                  learning_rate=1e-3) -> None:
         """
         Initialize the Generative Adversarial Network (GAN) with the 
@@ -78,13 +78,20 @@ class GAN():
         Returns:
         None
         """
-        self.gen = generator
-        self.disc = discriminator
+        self.device = device("cuda" if cuda.is_available() else "cpu" if not backends.mps.is_available() else "mps")
+        self.gen = generator.to(self.device)
+        self.disc = discriminator.to(self.device)
         self.gen_input = iter(generator_input)
         self.disc_input = iter(groundtruth)
         self.criterion = criterion
         self.gen_opt = optimizer(self.gen.parameters(), lr = learning_rate)
         self.disc_opt = optimizer(self.disc.parameters(), lr = learning_rate)
+        self.gen_scheduler = None
+        self.disc_scheduler = None
+        if schefuler:
+            self.gen_scheduler = schefuler(self.gen_opt)
+            self.disc_scheduler = schefuler(self.disc_opt)
+        self.callback = None
 
     @staticmethod
     def loss_calculation(true_loss, false_loss, proportion) -> int:
@@ -112,8 +119,10 @@ class GAN():
         Returns:
         The loss value for the generator.
         """
-
+        inputs = inputs.detach().clone()
         outs = self.gen(inputs)
+        if self.callback:
+            self.callback(outs)
         checked = self.disc(outs)
         return self.criterion(checked, ones_like(checked))
 
@@ -132,6 +141,8 @@ class GAN():
         truth_inputs = next(self.disc_input)
         if inputs is None or truth_inputs is None:
             return None, None
+        inputs = inputs.to(self.device)
+        truth_inputs = truth_inputs.to(self.device)
         outs = self.gen(inputs)
         checked = self.disc(outs.detach())
         results = self.disc(truth_inputs)
@@ -147,6 +158,8 @@ class GAN():
         applying backpropagation. The generator's weights are then updated based on 
         its loss, which is calculated by how well it fools the discriminator.
         """
+        self.gen.train()
+        self.disc.train()
 
         while True:
             self.disc_opt.zero_grad()
@@ -165,3 +178,10 @@ class GAN():
     def training_loop(self, epoch):
         for _ in range(epoch):
             self.training()
+            if self.gen_scheduler:
+                self.gen_scheduler.step()
+            if self.disc_scheduler:
+                self.disc_scheduler.step()
+
+    def register_train_hook(self, callback):
+        self.callback = callback
