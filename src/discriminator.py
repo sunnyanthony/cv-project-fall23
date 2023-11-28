@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 from torch.nn import functional as F
+import math
 
 from FairMOT.FairMOT.src.lib.models.utils import _tranpose_and_gather_feat
 
@@ -23,9 +24,12 @@ def cblock(input_dim: int, output_dim: int, negative_slope=0.2, convpara=(4, 2, 
     ])
 
 class input_layer(nn.Module):
-    def __init__(self, emb_scale, emb_dim, nID) -> None:
+    def __init__(self, nID, emb_scale=None, emb_dim=128) -> None:
+        """
+        nID: from JDE dataloader
+        """
         super().__init__()
-        self.emb_scale = emb_scale
+        self.emb_scale = emb_scale if emb_scale is not None else math.sqrt(2) * math.log(nID - 1)
         # this id_mapper should be as same as the classifier in FairMOT's loss function
         # we should use this id_mapper to be the classifier in the FairMOT's loss function in testing phase
         self.id_mapper = nn.Linear(emb_dim, nID)
