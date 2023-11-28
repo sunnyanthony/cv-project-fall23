@@ -46,7 +46,7 @@ class input_layer(nn.Module):
             id_head = _tranpose_and_gather_feat(id, ind)
             id_head = id_head[reg_mask > 0].contiguous()
             id_head = self.emb_scale * F.normalize(id_head)
-            id = self.id_mapper(id)
+            id = self.id_mapper(id_head).contiguous()
         catlist = [torch.flatten(wh, start_dim=1),
                    torch.flatten(hm, start_dim=1),
                    torch.flatten(reg_mask, start_dim=1),
