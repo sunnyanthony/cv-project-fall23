@@ -1,7 +1,8 @@
 from typing import Any
 from torch.utils.data import DataLoader
 from torch import nn, optim, autograd, device, cuda, backends
-from torch import ones_like, zeros_like, mean, rand, ones
+from torch import ones_like, zeros_like, mean, rand, ones, tensor, randn_like
+from torch.nn import functional as F
 
 
 class wgan_criterion(nn.Module):
@@ -45,39 +46,39 @@ class stylegan_criterion(nn.Module):
 
     def compute_stylegan_discriminator_loss(discriminator, real_images, fake_images, gamma=10.0):
         # Hinge loss for real images
-        hinge_real = -torch.mean(torch.min(0, -1 + discriminator(real_images)))
+        hinge_real = -mean(min(0, -1 + discriminator(real_images)))
 
         # Hinge loss for fake images
-        hinge_fake = -torch.mean(torch.min(0, -1 - discriminator(fake_images)))
+        hinge_fake = -mean(min(0, -1 - discriminator(fake_images)))
 
         # R1 regularization
         real_images.requires_grad = True
         logits_real = discriminator(real_images)
-        gradients = torch.autograd.grad(outputs=logits_real.sum(), inputs=real_images, create_graph=True)[0]
-        r1_penalty = 0.5 * gamma * torch.mean(gradients.pow(2))
+        gradients = autograd.grad(outputs=logits_real.sum(), inputs=real_images, create_graph=True)[0]
+        r1_penalty = 0.5 * gamma * mean(gradients.pow(2))
 
         # Total discriminator loss
         discriminator_loss = hinge_real + hinge_fake + r1_penalty
 
         return discriminator_loss
 
-class BEGANDiscriminatorLoss(torch.nn.Module):
+class BEGANDiscriminatorLoss(nn.Module):
     def __init__(self, lambda_=0.001, gamma=0.75):
         super(BEGANDiscriminatorLoss, self).__init__()
         self.lambda_ = lambda_
         self.gamma = gamma
-        self.k_t = torch.tensor(0.0, requires_grad=False)
+        self.k_t = tensor(0.0, requires_grad=False)
 
     def forward(self, real_images, fake_images, discriminator, generator):
         # Autoencoder reconstruction loss for real images
         recon_real = F.l1_loss(real_images, discriminator(real_images))
 
         # Autoencoder reconstruction loss for fake images
-        fake_images_gen = generator(torch.randn_like(fake_images))
+        fake_images_gen = generator(randn_like(fake_images))
         recon_fake = F.l1_loss(fake_images, discriminator(fake_images_gen.detach()))
 
         # Convergence measure
-        balance = F.l1_loss(discriminator(fake_images_gen) - self.lambda_ * fake_images, torch.zeros_like(fake_images))
+        balance = F.l1_loss(discriminator(fake_images_gen) - self.lambda_ * fake_images, zeros_like(fake_images))
 
         # Total discriminator loss
         loss_d = recon_real - self.k_t * balance
