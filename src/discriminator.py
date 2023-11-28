@@ -6,6 +6,7 @@ import math
 from FairMOT.FairMOT.src.lib.models.utils import _tranpose_and_gather_feat
 
 __all__ = [
+    'Discriminator',
     'Discriminator0',
     'Discriminator1',
 ]
@@ -45,7 +46,10 @@ class input_layer(nn.Module):
         reg: both
         id: both
         """
-        id = ids[reg_mask > 0]
+
+        # keep dimension static
+        mask = reg_mask > 0
+        id = ids[~mask] = -1
         if not groundtruth:
             id_head = _tranpose_and_gather_feat(id, ind)
             id_head = id_head[reg_mask > 0].contiguous()
@@ -76,13 +80,13 @@ class Discriminator0(nn.Module):
 
 class Discriminator1(nn.Module):
     updown_sampling = []
-    def __init__(self, emb_scale, emb_dim, nID, hidden_dim, input: int = 1088*608):
+    def __init__(self, emb_scale, emb_dim, nID, hidden_dim, image_dim=64, input: int = 1088*608):
         super().__init__()
         self.first_layer = input_layer(emb_scale, emb_dim, nID)
         self.main = nn.Sequential(
-            cblock(input, input * 2),
-            cblock(input*2, input * 4),
-            cblock(input*4, input * 8),
+            cblock(3, image_dim * 2),
+            cblock(image_dim * 2, image_dim * 4),
+            cblock(image_dim * 4, image_dim * 8),
         )
 
         self.out_layer = nn.Sequential(
@@ -112,4 +116,52 @@ class Discriminator1(nn.Module):
         metadata = self.first_layer(b, wh, hm, reg_mask, reg, ind, ids, groundtruth)
         x = self.main(image)
         output = torch.cat([x.view(b, -1), metadata.view(b, -1)], -1)
+        return self.out_layer(output)
+    
+
+
+class Discriminator(nn.Module):
+    updown_sampling = []
+    def __init__(self, emb_scale, emb_dim, nID, hidden_dim, gt_dim, totol_dim):
+        super().__init__()
+        self.first_layer = input_layer(emb_scale, emb_dim, nID)
+        self.gt_layer = nn.Sequential(
+            nn.LayerNorm(gt_dim, eps=1e-12),
+            nn.Linear(gt_dim, hidden_dim * 2),
+            nn.ReLU(),
+        )
+
+        self.out_layer = nn.Sequential(
+            nn.LayerNorm(totol_dim, eps=1e-12),
+            nn.GELU(),
+            nn.Linear(totol_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim, eps=1e-12),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim * 2),
+            nn.LayerNorm(hidden_dim, eps=1e-12),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim, eps=1e-12),
+            nn.Linear(hidden_dim, 1),
+            nn.ReLU(),
+        )
+
+    def forward(self, wh, hm, reg, ids, reg_mask_gt, reg_gt, ind_gt, wh_gt, hm_gt, groundtruth):
+        """
+        groundtruth: to identify
+        reg_mask: from groundtruth
+        ind: from groundtruth
+        wh: both
+        hm: both
+        reg: both
+        id: both
+        """
+        batch_size = wh.shape[0]
+        metadata = self.first_layer(batch_size, wh, hm, reg_mask_gt, reg, ind_gt, ids, groundtruth)
+        gt_layer_input = torch.cat([torch.flatten(ind_gt, start_dim=1),
+            torch.flatten(reg_gt, start_dim=1),
+            torch.flatten(wh_gt, start_dim=1),
+            torch.flatten(hm_gt, start_dim=1)], dim=-1)
+        gtdata = self.gt_layer(gt_layer_input)
+        output = torch.cat([gtdata.view(batch_size, -1), metadata.view(batch_size, -1)], -1)
         return self.out_layer(output)
