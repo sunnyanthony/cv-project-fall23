@@ -42,11 +42,13 @@ class MotLoss(torch.nn.Module):
         self.emb_scale = math.sqrt(2) * math.log(self.nID - 1)
         self.s_det = nn.Parameter(-1.85 * torch.ones(1))
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
-        self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64, opt.gt_dim, opt.total_dim).to(opt.device)
-        self.D_loss = opt.D_loss() if opt.D_loss else nn.BCEWithLogitsLoss()
-        self.D_opt = opt.D_opt(self.D.parameters()) if opt.D_opt else torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
-        self.G_loss = opt.G_loss() if opt.G_loss else nn.BCEWithLogitsLoss()
         self.gan = True
+        if self.gan:
+            self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
+            self.D_loss = nn.BCEWithLogitsLoss()
+            self.D_opt = torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
+            self.G_loss = nn.BCEWithLogitsLoss()
+        
 
     def forward(self, outputs, batch):
         if self.gan:
@@ -59,12 +61,13 @@ class MotLoss(torch.nn.Module):
         loss, hm_loss, wh_loss, off_loss, id_loss = 0, 0, 0, 0, 0
 
         self.D_opt.zero_grad()
-        d_input = outputs.clone().detach()
+        d_input = [ {key: value.detach() for key, value in output.items()} for output in outputs]
         d_fake_loss, d_real_loss = 0, 0
         groundtruth = False
         for s in range(opt.num_stacks):
             # the fake data should far from zero, because d_out is the error of the predict and ground truth
             input = d_input[s]
+            #wh, hm, reg, id, ids, reg_mask_gt, reg_gt, ind_gt, wh_gt, hm_gt
             d_out =  self.D(input['wh'],
                             input['hm'],
                             input['reg'],
@@ -90,7 +93,7 @@ class MotLoss(torch.nn.Module):
                         batch['wh'],
                         batch['hm'], groundtruth)
         d_real_loss += self.D_loss(d_out, torch.ones_like(d_out))
-        d_total = 0.5 * d_out + 0.5 * d_real_loss / opt.num_stacks
+        d_total = 0.5 * d_real_loss + 0.5 * d_fake_loss / opt.num_stacks
         d_total.backward()
         self.D_opt.step()
 
