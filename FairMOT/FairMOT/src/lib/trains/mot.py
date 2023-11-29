@@ -17,6 +17,7 @@ from models.decode import mot_decode
 from models.utils import _sigmoid, _tranpose_and_gather_feat
 from utils.post_process import ctdet_post_process
 from .base_trainer import BaseTrainer
+from src.discriminator import Discriminator
 
 
 class MotLoss(torch.nn.Module):
@@ -41,8 +42,80 @@ class MotLoss(torch.nn.Module):
         self.emb_scale = math.sqrt(2) * math.log(self.nID - 1)
         self.s_det = nn.Parameter(-1.85 * torch.ones(1))
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
+        self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64, opt.gt_dim, opt.total_dim).to(opt.device)
+        self.D_loss = opt.D_loss() if opt.D_loss else nn.BCEWithLogitsLoss()
+        self.D_opt = opt.D_opt(self.D.parameters()) if opt.D_opt else torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
+        self.G_loss = opt.G_loss() if opt.G_loss else nn.BCEWithLogitsLoss()
+        self.gan = True
 
     def forward(self, outputs, batch):
+        if self.gan:
+            return self.forward_1(outputs, batch)
+        else:
+            return self.forward_0(outputs, batch)
+
+    def forward_1(self, outputs, batch):
+        opt = self.opt
+        loss, hm_loss, wh_loss, off_loss, id_loss = 0, 0, 0, 0, 0
+
+        self.D_opt.zero_grad()
+        d_input = outputs.clone().detach()
+        d_fake_loss, d_real_loss = 0, 0
+        groundtruth = False
+        for s in range(opt.num_stacks):
+            # the fake data should far from zero, because d_out is the error of the predict and ground truth
+            input = d_input[s]
+            d_out =  self.D(input['wh'],
+                            input['hm'],
+                            input['reg'],
+                            input['id'],
+                            batch['ids'],
+                            batch['reg_mask'],
+                            batch['reg'],
+                            batch['ind'],
+                            batch['wh'],
+                            batch['hm'], groundtruth)
+            d_fake_loss += self.D_loss(d_out, torch.ones_like(d_out))
+        # the fake data should close to zero, because d_out is the error of the predict and ground truth
+        groundtruth = True
+        input = batch
+        d_out =  self.D(input['wh'],
+                        input['hm'],
+                        input['reg'],
+                        input['ids'],
+                        batch['ids'],
+                        batch['reg_mask'],
+                        batch['reg'],
+                        batch['ind'],
+                        batch['wh'],
+                        batch['hm'], groundtruth)
+        d_real_loss += self.D_loss(d_out, torch.ones_like(d_out))
+        d_total = 0.5 * d_out + 0.5 * d_real_loss / opt.num_stacks
+        d_total.backward()
+        self.D_opt.step()
+
+        g_fake_loss = 0
+        groundtruth = False
+        for s in range(opt.num_stacks):
+            # the fake data should close to zero, because g_out want to cheat the discriminator
+            input = outputs[s]
+            g_out =  self.D(input['wh'],
+                            input['hm'],
+                            input['reg'],
+                            input['id'],
+                            batch['ids'],
+                            batch['reg_mask'],
+                            batch['reg'],
+                            batch['ind'],
+                            batch['wh'],
+                            batch['hm'], groundtruth)
+            g_fake_loss += self.G_loss(g_out, torch.zeros_like(g_out))
+
+        loss_stats = {'loss': g_fake_loss / opt.num_stacks, 'hm_loss': hm_loss,
+                      'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss}
+        return loss, loss_stats
+
+    def forward_0(self, outputs, batch):
         opt = self.opt
         hm_loss, wh_loss, off_loss, id_loss = 0, 0, 0, 0
         for s in range(opt.num_stacks):
