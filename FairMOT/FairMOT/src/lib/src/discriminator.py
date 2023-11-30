@@ -103,7 +103,7 @@ class input_layer(nn.Module):
 class Discriminator0(nn.Module):
     updown_sampling = []
     def __init__(self, emb_scale, emb_dim, nID, hidden_dim,
-                 total_dim=2240,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
+                 total_dim=128,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
                  gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272):
         super().__init__()
         self.first_layer = input_layer(nID, emb_scale, emb_dim, hidden_dim)
