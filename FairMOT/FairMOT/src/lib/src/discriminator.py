@@ -7,8 +7,6 @@ from models.utils import _tranpose_and_gather_feat
 
 __all__ = [
     'Discriminator',
-    'Discriminator0',
-    'Discriminator1',
 ]
 
 def block(input_dim: int, output_dim: int, negative_slope=0.2):
@@ -41,7 +39,7 @@ class ConvReshapeLayer(nn.Module):
         return x
 
 class input_layer(nn.Module):
-    def __init__(self, nID, emb_scale=None, emb_dim=128) -> None:
+    def __init__(self, nID, emb_scale=None, emb_dim=128, output=2048, hidden_dim=64) -> None:
         """
         nID: from JDE dataloader
         """
@@ -51,9 +49,10 @@ class input_layer(nn.Module):
         # we should use this id_mapper to be the classifier in the FairMOT's loss function in testing phase
         self.nID =nID
         self.id_mapper = nn.Linear(emb_dim, nID)
-        self.id_mapper2 = nn.Linear(500, 500*nID)
+        self.id_mapper2 = nn.Linear(500, 500 * nID)
         self.wh_mapper = ConvReshapeLayer(4 ,32 * 8 * 15, 500 * 4)
         self.reg_mapper = ConvReshapeLayer(2, 16 * 8 * 15, 500 * 2)
+        self.output = nn.Linear(1152844, output)
 
     def forward(self, b, wh, hm, reg, reg_mask, ind, ids, groundtruth):
         """
@@ -85,85 +84,31 @@ class input_layer(nn.Module):
                 f"""
                 {wh.shape=} ,
                 {hm.shape=} ,
-                {id.shape=}
+                {id.shape=},
+                {reg.shape=}
                 """
             )
 
         catlist = [torch.flatten(wh, start_dim=1),
                    torch.flatten(hm, start_dim=1),
-                   torch.flatten(reg_mask, start_dim=1),
+                   #torch.flatten(reg_mask, start_dim=1),
                    torch.flatten(reg, start_dim=1),
-                   torch.flatten(ind, start_dim=1),
+                   #torch.flatten(ind, start_dim=1),
                    torch.flatten(id, start_dim=1),]
         metadata = torch.cat(catlist, dim=1)
 
-        return metadata.view(b, -1)
-
-class Discriminator0(nn.Module):
-    def __init__(self, img_dim: int = 1088*608, hidden_dim: int = 128):
-        super().__init__()
-        self.discriminator = nn.Sequential(*[
-              block(img_dim, hidden_dim*4),
-              block(hidden_dim*4, hidden_dim*2),
-              block(hidden_dim*2, hidden_dim),
-              nn.Linear(hidden_dim, 1),
-            ])
-
-    def forward(self, image: torch.Tensor):
-        return self.discriminator(image)
-
-class Discriminator1(nn.Module):
-    updown_sampling = []
-    def __init__(self, emb_scale, emb_dim, nID, hidden_dim, image_dim=64, input: int = 1088*608):
-        super().__init__()
-        self.first_layer = input_layer(emb_scale, emb_dim, nID)
-        self.main = nn.Sequential(
-            cblock(3, image_dim * 2),
-            cblock(image_dim * 2, image_dim * 4),
-            cblock(image_dim * 4, image_dim * 8),
-        )
-
-        self.out_layer = nn.Sequential(
-            nn.LayerNorm(hidden_dim, eps=1e-12),
-            nn.GELU(),
-            nn.Linear(hidden_dim, hidden_dim * 2),
-            nn.LayerNorm(hidden_dim, eps=1e-12),
-            nn.Linear(hidden_dim * 2, hidden_dim),
-            nn.GELU(),
-            nn.LayerNorm(hidden_dim, eps=1e-12),
-            nn.Linear(hidden_dim, 1),
-            nn.ReLU(),
-        )
-
-    def forward(self, image, wh, hm, reg_mask, reg, ind, ids, groundtruth):
-        """
-        groundtruth: to identify
-        image: from groundtruth
-        reg_mask: from groundtruth
-        ind: from groundtruth
-        wh: both
-        hm: both
-        reg: both
-        id: both
-        """
-        b, w, h = image.size()
-        metadata = self.first_layer(b, wh, hm, reg_mask, reg, ind, ids, groundtruth)
-        x = self.main(image)
-        output = torch.cat([x.view(b, -1), metadata.view(b, -1)], -1)
-        return self.out_layer(output)
-    
-
+        return self.output(metadata.view(b, -1))
 
 class Discriminator(nn.Module):
     updown_sampling = []
     def __init__(self, emb_scale, emb_dim, nID, hidden_dim,
-                 total_dim=1154036,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
+                 total_dim=2240,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
                  gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272):
         super().__init__()
         self.first_layer = input_layer(nID, emb_scale, emb_dim, )
         self.gt_layer = nn.Sequential(
             nn.LayerNorm(gt_dim, eps=1e-12),
-            nn.Linear(gt_dim, hidden_dim * 3),
+            nn.Linear(gt_dim, hidden_dim),
             nn.ReLU(),
         )
 
@@ -171,9 +116,6 @@ class Discriminator(nn.Module):
             nn.LayerNorm(total_dim, eps=1e-12),
             nn.GELU(),
             nn.Linear(total_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim, eps=1e-12),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.GELU(),
             nn.LayerNorm(hidden_dim, eps=1e-12),
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
