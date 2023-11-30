@@ -53,7 +53,7 @@ class input_layer(nn.Module):
         self.id_mapper2 = nn.Linear(500, 500)# * nID)
         self.wh_mapper = ConvReshapeLayer(4 ,32 * 8 * 15, 500 * 4)
         self.reg_mapper = ConvReshapeLayer(2, 16 * 8 * 15, 500 * 2)
-        self.output = nn.Linear(1152844, output)
+        self.output = nn.Linear(44844, output)
 
     def forward(self, b, wh, hm, reg, reg_mask, ind, ids, groundtruth):
         """
@@ -97,7 +97,6 @@ class input_layer(nn.Module):
                    #torch.flatten(ind, start_dim=1),
                    torch.flatten(id, start_dim=1),]
         metadata = torch.cat(catlist, dim=1)
-        print(metadata.shape)
 
         return self.output(metadata.view(b, -1))
 
