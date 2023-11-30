@@ -7,6 +7,7 @@ from models.utils import _tranpose_and_gather_feat
 
 __all__ = [
     'Discriminator',
+    'Discriminator0',
 ]
 
 def block(input_dim: int, output_dim: int, negative_slope=0.2):
@@ -98,6 +99,56 @@ class input_layer(nn.Module):
         metadata = torch.cat(catlist, dim=1)
 
         return self.output(metadata.view(b, -1))
+
+class Discriminator0(nn.Module):
+    updown_sampling = []
+    def __init__(self, emb_scale, emb_dim, nID, hidden_dim,
+                 total_dim=2240,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
+                 gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272):
+        super().__init__()
+        self.first_layer = input_layer(nID, emb_scale, emb_dim, hidden_dim)
+        self.gt_layer = nn.Sequential(
+            nn.LayerNorm(gt_dim, eps=1e-12),
+            nn.Linear(gt_dim, hidden_dim),
+            nn.ReLU(),
+        )
+
+        self.out_layer = nn.Sequential(
+            nn.LayerNorm(total_dim, eps=1e-12),
+            nn.GELU(),
+            nn.Linear(total_dim, 1),
+            nn.ReLU(),
+        )
+
+    def forward(self, wh, hm, reg, id, ids_gt, reg_mask_gt, reg_gt, ind_gt, wh_gt, hm_gt, groundtruth):
+        """
+        wh (4, 152, 272), or (500, 4)
+        hm (1, 152, 272)
+        reg (2, 152, 272), or (500, 2)
+        id (128, 152, 272), or (500)
+        ids (500)
+        reg_mask_gt (500)
+        reg_gt (500, 2)
+        ind_gt (500)
+        wh_gt (500, 4)
+        hm_gt (1, 152, 272)
+        """
+        if True:
+            print(groundtruth)
+        batch_size = wh.shape[0] # should be 12
+        # metadata.shape should be 500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500 + nID
+        metadata = self.first_layer(batch_size, wh, hm, reg, reg_mask_gt, ind_gt, id, groundtruth)
+        gt_layer_input = torch.cat([
+            torch.flatten(ids_gt, start_dim=1),
+            torch.flatten(ind_gt, start_dim=1),
+            torch.flatten(reg_mask_gt, start_dim=1),
+            torch.flatten(reg_gt, start_dim=1),
+            torch.flatten(wh_gt, start_dim=1),
+            torch.flatten(hm_gt, start_dim=1)], dim=-1)
+        gtdata = self.gt_layer(gt_layer_input)
+        output = torch.cat([gtdata.view(batch_size, -1), metadata.view(batch_size, -1)], -1)
+        return self.out_layer(output)
+
 
 class Discriminator(nn.Module):
     updown_sampling = []

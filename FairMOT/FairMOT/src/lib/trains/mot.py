@@ -17,7 +17,7 @@ from models.decode import mot_decode
 from models.utils import _sigmoid, _tranpose_and_gather_feat
 from utils.post_process import ctdet_post_process
 from .base_trainer import BaseTrainer
-from src.discriminator import Discriminator
+from src.discriminator import Discriminator, Discriminator0
 
 
 class MotLoss(torch.nn.Module):
@@ -44,7 +44,10 @@ class MotLoss(torch.nn.Module):
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
         self.gan = True
         if self.gan:
-            self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
+            if True:
+                self.D = Discriminator0(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
+            else:
+                self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
             self.D_loss = nn.BCEWithLogitsLoss()
             self.D_opt = torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
             self.G_loss = nn.BCEWithLogitsLoss()
