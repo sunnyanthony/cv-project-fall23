@@ -49,7 +49,6 @@ class MotLoss(torch.nn.Module):
             self.D_opt = torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
             self.G_loss = nn.BCEWithLogitsLoss()
         
-
     def forward(self, outputs, batch):
         if self.gan:
             return self.forward_1(outputs, batch)
@@ -67,7 +66,6 @@ class MotLoss(torch.nn.Module):
         for s in range(opt.num_stacks):
             # the fake data should far from zero, because d_out is the error of the predict and ground truth
             input = d_input[s]
-            #wh, hm, reg, id, ids, reg_mask_gt, reg_gt, ind_gt, wh_gt, hm_gt
             d_out =  self.D(input['wh'],
                             input['hm'],
                             input['reg'],

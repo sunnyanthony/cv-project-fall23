@@ -230,6 +230,7 @@ class GAN():
     def training_loop(self, epoch):
         for _ in range(epoch):
             self.training()
+            
             if self.gen_scheduler:
                 self.gen_scheduler.step()
             if self.disc_scheduler:
@@ -237,3 +238,4 @@ class GAN():
 
     def register_train_hook(self, callback):
         self.callback = callback
+
