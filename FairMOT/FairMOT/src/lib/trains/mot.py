@@ -61,6 +61,7 @@ class MotLoss(torch.nn.Module):
     def forward_1(self, outputs, batch):
         opt = self.opt
         loss, hm_loss, wh_loss, off_loss, id_loss = 0, 0, 0, 0, 0
+        torch.cuda.empty_cache()
 
         self.D_opt.zero_grad()
         d_input = [ {key: value.detach() for key, value in output.items()} for output in outputs]
@@ -80,6 +81,8 @@ class MotLoss(torch.nn.Module):
                             batch['wh'],
                             batch['hm'], groundtruth)
             d_fake_loss += self.D_loss(d_out, torch.ones_like(d_out))
+        del d_input
+        torch.cuda.empty_cache()
         # the fake data should close to zero, because d_out is the error of the predict and ground truth
         groundtruth = True
         input = batch
@@ -93,10 +96,12 @@ class MotLoss(torch.nn.Module):
                         batch['ind'],
                         batch['wh'],
                         batch['hm'], groundtruth)
+        torch.cuda.empty_cache()
         d_real_loss += self.D_loss(d_out, torch.ones_like(d_out))
         d_total = 0.5 * d_real_loss + 0.5 * d_fake_loss / opt.num_stacks
         d_total.backward()
         self.D_opt.step()
+        torch.cuda.empty_cache()
 
         g_fake_loss = 0
         groundtruth = False
