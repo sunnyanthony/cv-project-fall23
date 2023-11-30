@@ -119,11 +119,10 @@ class MotLoss(torch.nn.Module):
                             batch['wh'],
                             batch['hm'], groundtruth)
             g_fake_loss += self.G_loss(g_out, torch.zeros_like(g_out))
-            print(g_fake_loss)
 
         loss_stats = {'loss': g_fake_loss / opt.num_stacks, 'hm_loss': hm_loss,
                       'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss}
-        return loss, loss_stats
+        return g_fake_loss, loss_stats
 
     def forward_0(self, outputs, batch):
         opt = self.opt
