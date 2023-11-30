@@ -104,7 +104,7 @@ class Discriminator0(nn.Module):
     updown_sampling = []
     def __init__(self, emb_scale, emb_dim, nID, hidden_dim,
                  total_dim=128,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
-                 gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272):
+                 gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272 -500 - 500):
         super().__init__()
         self.first_layer = input_layer(nID, emb_scale, emb_dim, hidden_dim)
         self.gt_layer = nn.Sequential(
@@ -140,8 +140,8 @@ class Discriminator0(nn.Module):
         metadata = self.first_layer(batch_size, wh, hm, reg, reg_mask_gt, ind_gt, id, groundtruth)
         gt_layer_input = torch.cat([
             torch.flatten(ids_gt, start_dim=1),
-            torch.flatten(ind_gt, start_dim=1),
-            torch.flatten(reg_mask_gt, start_dim=1),
+            #torch.flatten(ind_gt, start_dim=1),
+            #torch.flatten(reg_mask_gt, start_dim=1),
             torch.flatten(reg_gt, start_dim=1),
             torch.flatten(wh_gt, start_dim=1),
             torch.flatten(hm_gt, start_dim=1)], dim=-1)
