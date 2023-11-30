@@ -133,7 +133,7 @@ class Discriminator0(nn.Module):
         wh_gt (500, 4)
         hm_gt (1, 152, 272)
         """
-        if True:
+        if False:
             print(groundtruth)
         batch_size = wh.shape[0] # should be 12
         # metadata.shape should be 500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500 + nID
@@ -188,7 +188,7 @@ class Discriminator(nn.Module):
         wh_gt (500, 4)
         hm_gt (1, 152, 272)
         """
-        if True:
+        if False:
             print(groundtruth)
         batch_size = wh.shape[0] # should be 12
         # metadata.shape should be 500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500 + nID
