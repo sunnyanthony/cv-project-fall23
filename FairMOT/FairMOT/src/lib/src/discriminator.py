@@ -49,8 +49,8 @@ class input_layer(nn.Module):
         # this id_mapper should be as same as the classifier in FairMOT's loss function
         # we should use this id_mapper to be the classifier in the FairMOT's loss function in testing phase
         self.nID =nID
-        self.id_mapper = nn.Linear(emb_dim, nID)
-        self.id_mapper2 = nn.Linear(500, 500 * nID)
+        self.id_mapper = nn.Linear(emb_dim, 1)#nID)
+        self.id_mapper2 = nn.Linear(500, 500)# * nID)
         self.wh_mapper = ConvReshapeLayer(4 ,32 * 8 * 15, 500 * 4)
         self.reg_mapper = ConvReshapeLayer(2, 16 * 8 * 15, 500 * 2)
         self.output = nn.Linear(1152844, output)
@@ -97,6 +97,7 @@ class input_layer(nn.Module):
                    #torch.flatten(ind, start_dim=1),
                    torch.flatten(id, start_dim=1),]
         metadata = torch.cat(catlist, dim=1)
+        print(metadata.shape)
 
         return self.output(metadata.view(b, -1))
 
