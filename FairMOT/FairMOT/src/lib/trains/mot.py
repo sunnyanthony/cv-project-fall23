@@ -18,6 +18,7 @@ from models.utils import _sigmoid, _tranpose_and_gather_feat
 from utils.post_process import ctdet_post_process
 from .base_trainer import BaseTrainer
 from src.discriminator import Discriminator, Discriminator0
+from src.gan import losses
 
 
 class MotLoss(torch.nn.Module):
@@ -42,15 +43,16 @@ class MotLoss(torch.nn.Module):
         self.emb_scale = math.sqrt(2) * math.log(self.nID - 1)
         self.s_det = nn.Parameter(-1.85 * torch.ones(1))
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
-        self.gan = True
+        self.gan = opt.gan
         if self.gan:
             if True:
                 self.D = Discriminator0(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
             else:
                 self.D = Discriminator(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
-            self.D_loss = nn.BCEWithLogitsLoss()
+            loss = losses[opt.enable_gan]
+            self.D_loss = loss()
             self.D_opt = torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
-            self.G_loss = nn.BCEWithLogitsLoss()
+            self.G_loss = loss()
         
     def forward(self, outputs, batch):
         if self.gan:

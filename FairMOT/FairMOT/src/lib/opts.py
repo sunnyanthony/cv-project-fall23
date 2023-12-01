@@ -158,12 +158,21 @@ class opts(object):
                              help='category specific bounding box size.')
     self.parser.add_argument('--not_reg_offset', action='store_true',
                              help='not regress local offset.')
+    self.parser.add_argument('--enable_gan',
+                             choices=['tranditional', 'wgan', 'stylegan', 'BEGAN'],
+                             help='GAN: tranditional|wgan|stylegan|BEGAN')
+    self.parser.add_argument('--gan', default=False,
+                             help='enable gan')
 
   def parse(self, args=''):
     if args == '':
       opt = self.parser.parse_args()
     else:
       opt = self.parser.parse_args(args)
+
+    opt.gan = True if opt.enable_gan is not None else opt.gan
+    if opt.gan:
+      opt.enable_gan = 'tranditional' if opt.enable_gan is None else opt.enable_gan
 
     opt.gpus_str = opt.gpus
     opt.gpus = [int(gpu) for gpu in opt.gpus.split(',')]

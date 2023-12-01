@@ -10,9 +10,9 @@ class wgan_criterion(nn.Module):
         self.lambda_gp = lambda_gp
         self.disc = disc
         self.device = device("cuda" if cuda.is_available() else "cpu" if not backends.mps.is_available() else "mps")
-        #super().__init__(*args, **kwargs)
+        super().__init__()
     
-    def __call__(self, fake, real=None) -> Any:
+    def forward(self, fake, real=None) -> Any:
         return mean(fake) - (mean(real) if real else 0) + \
             self.compute_gradient_penalty(self.disc, real, fake, self.device)
 
@@ -39,9 +39,9 @@ class stylegan_criterion(nn.Module):
         self.lambda_gp = lambda_gp
         self.disc = disc
         self.device = device("cuda" if cuda.is_available() else "cpu" if not backends.mps.is_available() else "mps")
-        #super().__init__(*args, **kwargs)
+        super().__init__()
     
-    def __call__(self, fake, real=None) -> Any:
+    def forward(self, fake, real=None) -> Any:
         return self.compute_stylegan_discriminator_loss(self.disc, real, fake, self.device)
 
     def compute_stylegan_discriminator_loss(discriminator, real_images, fake_images, gamma=10.0):
@@ -64,7 +64,7 @@ class stylegan_criterion(nn.Module):
 
 class BEGANDiscriminatorLoss(nn.Module):
     def __init__(self, lambda_=0.001, gamma=0.75):
-        super(BEGANDiscriminatorLoss, self).__init__()
+        super().__init__()
         self.lambda_ = lambda_
         self.gamma = gamma
         self.k_t = tensor(0.0, requires_grad=False)
@@ -85,7 +85,7 @@ class BEGANDiscriminatorLoss(nn.Module):
         return loss_d
 
 losses = {
-    "tranditional": nn.BCELoss, # -y log x - (1-y) log (1-x) => probabilities
+    "tranditional": nn.BCEWithLogitsLoss, # -y log x - (1-y) log (1-x) => probabilities
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
     "stylegan": stylegan_criterion,
     "BEGAN": BEGANDiscriminatorLoss,
