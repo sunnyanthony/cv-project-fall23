@@ -161,7 +161,7 @@ class opts(object):
     self.parser.add_argument('--enable_gan',
                              choices=['tranditional', 'wgan', 'stylegan', 'BEGAN'],
                              help='GAN: tranditional|wgan|stylegan|BEGAN')
-    self.parser.add_argument('--gan', default=False,
+    self.parser.add_argument('--gan', action='store_true',
                              help='enable gan')
 
   def parse(self, args=''):
