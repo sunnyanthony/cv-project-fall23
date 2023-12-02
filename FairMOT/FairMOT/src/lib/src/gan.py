@@ -14,14 +14,14 @@ class wgan_criterion(nn.Module):
     
     def forward(self, fake, real=None) -> Any:
         return mean(fake) - (mean(real) if real else 0) + \
-            self.compute_gradient_penalty(self.disc, real, fake, self.device)
+            self.compute_gradient_penalty(real, fake)
 
-    def compute_gradient_penalty(self, Disc, real_data, fake_data, device):
+    def compute_gradient_penalty(self, real_data, fake_data, device):
         alpha = rand(real_data.size(0), 1, 1, 1, requires_grad=True).to(device)
         interpolates = (alpha * real_data + ((1 - alpha) * fake_data)).to(device)
         interpolates = interpolates.requires_grad_(True)
-        d_interpolates = Disc(interpolates)
-        fake = ones(d_interpolates.size()).requires_grad_(False).to(device)
+        d_interpolates = self.disc(interpolates)
+        fake = ones(d_interpolates.size()).requires_grad_(False).to(self.device)
         gradients = autograd.grad(
             outputs=d_interpolates,
             inputs=interpolates,
@@ -62,33 +62,11 @@ class stylegan_criterion(nn.Module):
 
         return discriminator_loss
 
-class BEGANDiscriminatorLoss(nn.Module):
-    def __init__(self, lambda_=0.001, gamma=0.75):
-        super().__init__()
-        self.lambda_ = lambda_
-        self.gamma = gamma
-        self.k_t = tensor(0.0, requires_grad=False)
-
-    def forward(self, real_images, fake_images, discriminator, generator):
-        # Autoencoder reconstruction loss for real images
-        recon_real = F.l1_loss(real_images, discriminator(real_images))
-
-        # Autoencoder reconstruction loss for fake images
-        fake_images_gen = generator(randn_like(fake_images))
-        recon_fake = F.l1_loss(fake_images, discriminator(fake_images_gen.detach()))
-
-        # Convergence measure
-        balance = F.l1_loss(discriminator(fake_images_gen) - self.lambda_ * fake_images, zeros_like(fake_images))
-
-        # Total discriminator loss
-        loss_d = recon_real - self.k_t * balance
-        return loss_d
 
 losses = {
     "tranditional": nn.BCEWithLogitsLoss, # -y log x - (1-y) log (1-x) => probabilities
     "wgan": wgan_criterion, # -y x + (1-y)(1-x) => score
     "stylegan": stylegan_criterion,
-    "BEGAN": BEGANDiscriminatorLoss,
 }
 
 class GAN():
