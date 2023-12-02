@@ -159,9 +159,9 @@ class opts(object):
     self.parser.add_argument('--not_reg_offset', action='store_true',
                              help='not regress local offset.')
     self.parser.add_argument('--enable_gan',
-                             choices=['tranditional', 'wgan', 'stylegan', 'BEGAN'],
-                             help='GAN: tranditional|wgan|stylegan|BEGAN')
-    self.parser.add_argument('--gan', action='store_true',
+                             choices=['tranditional', 'wgan', 'stylegan'],
+                             help='GAN: tranditional|wgan|stylegan')
+    self.parser.add_argument('--gan', action='store_true', default=False
                              help='enable gan')
 
   def parse(self, args=''):
