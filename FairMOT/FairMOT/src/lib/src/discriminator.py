@@ -53,7 +53,7 @@ class input_layer(nn.Module):
         self.id_mapper2 = nn.Linear(500, 500)# * nID)
         self.wh_mapper = ConvReshapeLayer(4 ,32 * 8 * 15, 500 * 4)
         self.reg_mapper = ConvReshapeLayer(2, 16 * 8 * 15, 500 * 2)
-        self.output = nn.Linear(44844, output)
+        self.output = nn.Linear(45844, output)
 
     def forward(self, b, wh, hm, reg, reg_mask, ind, ids, groundtruth):
         """
@@ -92,9 +92,9 @@ class input_layer(nn.Module):
 
         catlist = [torch.flatten(wh, start_dim=1),
                    torch.flatten(hm, start_dim=1),
-                   #torch.flatten(reg_mask, start_dim=1),
+                   torch.flatten(reg_mask, start_dim=1),
                    torch.flatten(reg, start_dim=1),
-                   #torch.flatten(ind, start_dim=1),
+                   torch.flatten(ind, start_dim=1),
                    torch.flatten(id, start_dim=1),]
         metadata = torch.cat(catlist, dim=1)
 
@@ -102,7 +102,7 @@ class input_layer(nn.Module):
 
 class Discriminator0(nn.Module):
     updown_sampling = []
-    def __init__(self, emb_scale, emb_dim, nID, hidden_dim,
+    def __init__(self, emb_scale, emb_dim=128, nID=2217, hidden_dim=64,
                  total_dim=128,#500 * 4 + 1 * 152 * 272 + 500 + 500 * 2 + 500,
                  gt_dim=500 + 500 + 500 + 500*2 + 500*4 + 1*152*272 -500 - 500):
         super().__init__()
@@ -159,10 +159,10 @@ class Discriminator(nn.Module):
         self.first_layer = input_layer(nID, emb_scale, emb_dim, )
         self.gt_layer = nn.Sequential(
             nn.LayerNorm(gt_dim, eps=1e-12),
-            nn.Linear(gt_dim, hidden_dim),
+            nn.Linear(gt_dim, 2048),
             nn.ReLU(),
         )
-
+        """
         self.out_layer = nn.Sequential(
             nn.LayerNorm(total_dim, eps=1e-12),
             nn.GELU(),
@@ -174,6 +174,7 @@ class Discriminator(nn.Module):
             nn.Linear(hidden_dim, 1),
             nn.ReLU(),
         )
+        """
 
     def forward(self, wh, hm, reg, id, ids_gt, reg_mask_gt, reg_gt, ind_gt, wh_gt, hm_gt, groundtruth):
         """
@@ -188,6 +189,7 @@ class Discriminator(nn.Module):
         wh_gt (500, 4)
         hm_gt (1, 152, 272)
         """
+        import torch.nn.functional as F
         if False:
             print(groundtruth)
         batch_size = wh.shape[0] # should be 12
@@ -201,5 +203,6 @@ class Discriminator(nn.Module):
             torch.flatten(wh_gt, start_dim=1),
             torch.flatten(hm_gt, start_dim=1)], dim=-1)
         gtdata = self.gt_layer(gt_layer_input)
-        output = torch.cat([gtdata.view(batch_size, -1), metadata.view(batch_size, -1)], -1)
-        return self.out_layer(output)
+        #output = torch.cat([gtdata.view(batch_size, -1), metadata.view(batch_size, -1)], -1)
+        #return self.out_layer(output)
+        return F.cosin_similarity(gtdata.view(batch_size, -1), metadata.view(batch_size, -1), dim=1)

@@ -45,6 +45,7 @@ class MotLoss(torch.nn.Module):
         self.s_id = nn.Parameter(-1.05 * torch.ones(1))
         self.gan = opt.gan
         if self.gan:
+            #print(f"{self.emb_scale}, {self.emb_dim}, {self.nID}")
             if True:
                 self.D = Discriminator0(self.emb_scale, self.emb_dim, self.nID, 64).to(opt.device)
             else:
@@ -52,7 +53,7 @@ class MotLoss(torch.nn.Module):
             loss = losses[opt.enable_gan]
             self.D_loss = loss()
             self.D_opt = torch.optim.Adam(self.D.parameters(), betas=(0.5, 0.999))
-            self.G_loss = loss()
+            self.G_loss = torch.nn.MSELoss()#loss()
         
     def forward(self, outputs, batch):
         if self.gan:
@@ -82,7 +83,7 @@ class MotLoss(torch.nn.Module):
                             batch['ind'],
                             batch['wh'],
                             batch['hm'], groundtruth)
-            d_fake_loss += self.D_loss(d_out, torch.ones_like(d_out))
+            d_fake_loss += d_out#self.D_loss(d_out, torch.ones_like(d_out) * -1)
         del d_input
         torch.cuda.empty_cache()
         # the fake data should close to zero, because d_out is the error of the predict and ground truth
@@ -99,9 +100,9 @@ class MotLoss(torch.nn.Module):
                         batch['wh'],
                         batch['hm'], groundtruth)
         torch.cuda.empty_cache()
-        d_real_loss += self.D_loss(d_out, torch.ones_like(d_out))
-        d_total = 0.5 * d_real_loss + 0.5 * d_fake_loss / opt.num_stacks
-        d_total.backward()
+        d_real_loss += 1 - d_out#self.D_loss(d_out, torch.ones_like(d_out))
+        d_total = 0.5 * d_real_loss + 0.5 * d_fake_loss
+        d_total.mean().backward()
         self.D_opt.step()
         torch.cuda.empty_cache()
 
@@ -114,17 +115,19 @@ class MotLoss(torch.nn.Module):
                             input['hm'],
                             input['reg'],
                             input['id'],
-                            batch['ids'],
-                            batch['reg_mask'],
-                            batch['reg'],
-                            batch['ind'],
-                            batch['wh'],
-                            batch['hm'], groundtruth)
-            g_fake_loss += self.G_loss(g_out, torch.zeros_like(g_out))
+                            batch['ids'].detach(),
+                            batch['reg_mask'].detach(),
+                            batch['reg'].detach(),
+                            batch['ind'].detach(),
+                            batch['wh'].detach(),
+                            batch['hm'].detach(), groundtruth)
+            g_fake_loss += g_out#self.G_loss(g_out, torch.ones_like(g_out))
+        loss_stats = {'loss': 1 - g_fake_loss, 'hm_loss': hm_loss,
+                     'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss}
 
-        loss_stats = {'loss': g_fake_loss / opt.num_stacks, 'hm_loss': hm_loss,
-                      'wh_loss': wh_loss, 'off_loss': off_loss, 'id_loss': id_loss}
-        return g_fake_loss, loss_stats
+        torch.save(self.D, '/home/grads/anthonycheng/cv-project-fall23/FairMOT/FairMOT/model_jit.pt')
+
+        return 1 - g_fake_loss, loss_stats
 
     def forward_0(self, outputs, batch):
         opt = self.opt

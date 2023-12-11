@@ -162,7 +162,7 @@ class opts(object):
                              choices=['tranditional', 'wgan', 'stylegan'],
                              help='GAN: tranditional|wgan|stylegan')
     self.parser.add_argument('--gan', action='store_true', default=False
-                             help='enable gan')
+                             ,help='enable gan')
 
   def parse(self, args=''):
     if args == '':
